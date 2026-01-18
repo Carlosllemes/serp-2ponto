@@ -13,7 +13,7 @@ services:
     volumes:
       - ./logs:/app/logs
     networks:
-      - network
+      - network_public
     labels:
       # Habilita Traefik
       - "traefik.enable=true"
@@ -31,5 +31,5 @@ services:
       - "traefik.http.services.serp-api.loadbalancer.server.port=3010"
 
 networks:
-  network:
+  network_public:
     external: true

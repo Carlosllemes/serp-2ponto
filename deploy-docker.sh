@@ -49,11 +49,11 @@ docker build -t serp-2ponto:latest .
 echo "▶️  Iniciando container..."
 
 # Verifica se rede do Traefik existe
-if docker network ls | grep -q "network"; then
+if docker network ls | grep -q "network_public"; then
     echo "Usando docker-compose.yml (com Traefik)..."
     $COMPOSE_CMD up -d
 else
-    echo "Rede 'network' não encontrada."
+    echo "Rede 'network_public' não encontrada."
     echo "Usando docker-compose.simple.yml (acesso direto pela porta 3010)..."
     $COMPOSE_CMD -f docker-compose.simple.yml up -d
 fi
