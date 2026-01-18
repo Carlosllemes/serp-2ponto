@@ -126,7 +126,7 @@ curl -H "x-api-key: API_KEY" \
   "https://serp.clemes.dev/api/jobs/job_1737234567890_a1b2c3d4"
 ```
 
-**Resposta (processando):**
+**Resposta (processando - mostra resultados parciais):**
 ```json
 {
   "job_id": "job_1737234567890_a1b2c3d4",
@@ -157,18 +157,19 @@ curl -H "x-api-key: API_KEY" \
 }
 ```
 
-**Resposta (completo):**
+**Resposta (completo - só CSV, sem results):**
 ```json
 {
   "job_id": "job_1737234567890_a1b2c3d4",
+  "domain": "example.com",
   "status": "completed",
   "progress": {
     "current": 3,
     "total": 3
   },
-  "results": [...],
-  "completedAt": "2026-01-18T22:04:30Z",
-  "csv_download": "/results/job_1737234567890_a1b2c3d4.csv"
+  "csv_download": "/results/job_1737234567890_a1b2c3d4.csv",
+  "message": "Job completo. Baixe o CSV para ver todos os resultados",
+  "completedAt": "2026-01-18T22:04:30Z"
 }
 ```
 

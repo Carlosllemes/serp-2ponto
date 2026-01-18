@@ -101,16 +101,19 @@ router.get('/jobs/:job_id', authMiddleware, (req, res) => {
         domain: job.domain,
         status: job.status,
         progress: job.progress,
-        results: job.results,
         created: job.created,
         updated: job.updated,
         startedAt: job.startedAt,
         completedAt: job.completedAt
     };
 
-    // Adiciona URL de download se CSV foi gerado
-    if (job.csvFile) {
+    // Se completo e tem CSV, não retorna results (use CSV)
+    // Se processando, retorna results parciais para acompanhar
+    if (job.status === 'completed' && job.csvFile) {
         response.csv_download = `/results/${job.csvFile}`;
+        response.message = 'Job completo. Baixe o CSV para ver todos os resultados';
+    } else {
+        response.results = job.results;
     }
 
     res.json(response);
