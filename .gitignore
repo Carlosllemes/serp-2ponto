@@ -1,7 +1,28 @@
+# Dependencies
+node_modules/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pm2-error.log
+pm2-out.log
 
 # Playwright
-node_modules/
 /test-results/
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+
+# Arquivos gerados
+links.txt
+error_screenshot.png
+debug_screenshot.png
+
+# Environment
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
