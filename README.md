@@ -28,7 +28,7 @@ npm start
 npm run api
 ```
 
-O servidor estará rodando em `http://localhost:3000`
+O servidor estará rodando em `http://localhost:3010`
 
 ### Endpoints
 
@@ -36,14 +36,14 @@ O servidor estará rodando em `http://localhost:3000`
 
 ```bash
 # Sem API Key do CapMonster (retorna erro se houver CAPTCHA)
-curl -X POST http://localhost:3000/api/extract-links \
+curl -X POST http://localhost:3010/api/extract-links \
   -H "Content-Type: application/json" \
   -d '{
     "domain": "example.com"
   }'
 
 # Com API Key do CapMonster (resolve CAPTCHA automaticamente)
-curl -X POST http://localhost:3000/api/extract-links \
+curl -X POST http://localhost:3010/api/extract-links \
   -H "Content-Type: application/json" \
   -d '{
     "domain": "example.com",
@@ -54,13 +54,13 @@ curl -X POST http://localhost:3000/api/extract-links \
 #### 2. Extrair links (GET - para testes)
 
 ```bash
-curl "http://localhost:3000/api/extract-links?domain=example.com"
+curl "http://localhost:3010/api/extract-links?domain=example.com"
 ```
 
 #### 3. Health check
 
 ```bash
-curl http://localhost:3000/health
+curl http://localhost:3010/health
 ```
 
 ### Resposta da API
@@ -129,10 +129,10 @@ pm2 save
 
 ```bash
 # Ubuntu/Debian
-sudo ufw allow 3000/tcp
+sudo ufw allow 3010/tcp
 
 # CentOS/RHEL
-sudo firewall-cmd --add-port=3000/tcp --permanent
+sudo firewall-cmd --add-port=3010/tcp --permanent
 sudo firewall-cmd --reload
 ```
 
@@ -166,7 +166,7 @@ server {
     server_name api.seudominio.com;
 
     location / {
-        proxy_pass http://localhost:3000;
+        proxy_pass http://localhost:3010;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -198,13 +198,13 @@ sudo certbot --nginx -d api.seudominio.com
 Crie um arquivo `.env` (opcional):
 
 ```env
-PORT=3000
+PORT=3010
 NODE_ENV=production
 ```
 
 ### Porta
 
-A porta padrão é `3000`. Para alterar:
+A porta padrão é `3010`. Para alterar:
 
 ```bash
 PORT=8080 npm start
@@ -260,7 +260,7 @@ A API agora suporta resolução automática de CAPTCHA usando CapMonster Cloud! 
 
    **Opção 2: Via requisição API**
    ```bash
-   curl -X POST http://localhost:3000/api/extract-links \
+   curl -X POST http://localhost:3010/api/extract-links \
      -H "Content-Type: application/json" \
      -d '{
        "domain": "example.com",
