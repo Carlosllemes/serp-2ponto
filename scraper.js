@@ -159,32 +159,88 @@ async function extractLinks(domain, proxy = null, captchaApiKey = null) {
             referer: 'https://www.google.com/'
         });
         console.log("Página do Google carregada");
-        await page.waitForTimeout(randomDelay(1000, 3000));
+        await page.waitForTimeout(randomDelay(1000, 2000));
+
+        // Tenta fechar popup de consentimento de cookies do Google (GDPR)
+        try {
+            // Botões comuns de aceitar cookies
+            const cookieSelectors = [
+                'button[id="L2AGLb"]',           // "Aceitar tudo" em português
+                'button[id="W0wltc"]',           // "Rejeitar tudo"
+                '[aria-label="Aceitar tudo"]',
+                '[aria-label="Accept all"]',
+                'button:has-text("Aceitar tudo")',
+                'button:has-text("Accept all")',
+                'button:has-text("Concordo")',
+                'button:has-text("I agree")',
+                'div[role="dialog"] button:first-of-type',
+                '.QS5gu.sy4vM'                   // Classe comum do botão
+            ];
+            
+            for (const selector of cookieSelectors) {
+                const cookieButton = page.locator(selector).first();
+                if (await cookieButton.count() > 0) {
+                    console.log("🍪 Popup de cookies detectada, fechando...");
+                    await cookieButton.click({ timeout: 3000 }).catch(() => {});
+                    await page.waitForTimeout(1000);
+                    break;
+                }
+            }
+        } catch (cookieError) {
+            console.log("Nenhuma popup de cookies encontrada ou erro ao fechar:", cookieError.message);
+        }
+
+        await page.waitForTimeout(randomDelay(500, 1000));
 
         // Simula rolagem para parecer humano
         await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight / 2));
         await page.waitForTimeout(randomDelay(500, 1500));
 
-        // Localiza o campo de busca
-        const searchInput = page.locator('textarea[name="q"]');
-        await searchInput.waitFor({ state: 'visible', timeout: 10000 });
-        console.log("Campo de busca encontrado");
+        // Tenta diferentes seletores para o campo de busca
+        let searchInput;
+        const searchSelectors = [
+            'textarea[name="q"]',
+            'input[name="q"]',
+            '[aria-label="Pesquisar"]',
+            '[aria-label="Search"]',
+            '#APjFqb'
+        ];
+        
+        for (const selector of searchSelectors) {
+            searchInput = page.locator(selector).first();
+            if (await searchInput.count() > 0) {
+                try {
+                    await searchInput.waitFor({ state: 'visible', timeout: 5000 });
+                    console.log(`Campo de busca encontrado: ${selector}`);
+                    break;
+                } catch (e) {
+                    continue;
+                }
+            }
+        }
+
+        if (!searchInput || await searchInput.count() === 0) {
+            throw new Error('Campo de busca não encontrado');
+        }
 
         // Preenche o campo de forma mais humana (digitando)
         const searchQuery = `site:${domain}`;
-        await searchInput.click(); // Clica primeiro
-        await page.waitForTimeout(randomDelay(200, 500));
         
-        // Digita letra por letra para parecer humano
-        for (const char of searchQuery) {
-            await searchInput.type(char, { delay: randomDelay(50, 150) });
-        }
+        // Usa JavaScript para focar e preencher (evita problemas de overlay)
+        await page.evaluate((query) => {
+            const input = document.querySelector('textarea[name="q"]') || document.querySelector('input[name="q"]');
+            if (input) {
+                input.focus();
+                input.value = query;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        }, searchQuery);
         
         console.log(`Campo preenchido com: ${searchQuery}`);
-        await page.waitForTimeout(randomDelay(800, 2000)); // Aguarda um pouco antes de enviar
+        await page.waitForTimeout(randomDelay(500, 1000));
         
-        // Pressiona Enter
-        await searchInput.press('Enter');
+        // Pressiona Enter via JavaScript também
+        await page.keyboard.press('Enter');
         await page.waitForLoadState('networkidle', { timeout: 30000 });
         console.log(`Pesquisa realizada para: ${domain}`);
 
