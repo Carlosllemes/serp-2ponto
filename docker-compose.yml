@@ -19,7 +19,7 @@ services:
       - "traefik.enable=true"
       
       # Rota HTTP
-      - "traefik.http.routers.serp-api.rule=Host(`serp.seudominio.com`)"
+      - "traefik.http.routers.serp-api.rule=Host(`serp.textopro.com.br`)"
       - "traefik.http.routers.serp-api.entrypoints=web"
       
       # Rota HTTPS (descomente se usar SSL)
@@ -31,5 +31,5 @@ services:
       - "traefik.http.services.serp-api.loadbalancer.server.port=3010"
 
 networks:
-  traefik-network:
+  network:
     external: true
