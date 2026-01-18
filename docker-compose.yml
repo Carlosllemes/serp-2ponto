@@ -22,7 +22,7 @@ services:
       labels:
         - traefik.enable=true
         - traefik.docker.network=network_public
-        - traefik.http.routers.serp-api.rule=Host(`serp.textopro.com.br`)
+        - traefik.http.routers.serp-api.rule=Host(`serp.clemes.dev`)
         - traefik.http.routers.serp-api.entrypoints=websecure
         - traefik.http.routers.serp-api.tls.certresolver=letsencryptresolver
         - traefik.http.services.serp-api.loadbalancer.server.port=3010
