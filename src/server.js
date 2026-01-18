@@ -11,6 +11,9 @@ const adminRoutes = require('./api/routes/admin');
 const app = express();
 const PORT = process.env.PORT || 3010;
 
+// Trust proxy (necessário quando atrás de Traefik/nginx)
+app.set('trust proxy', true);
+
 // Swagger config
 const swaggerOptions = {
     definition: {

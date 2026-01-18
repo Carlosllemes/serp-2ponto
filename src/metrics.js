@@ -1,7 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const METRICS_FILE = path.join(__dirname, 'api-keys.json');
+// api-keys.json está na raiz do projeto, não em src/
+const METRICS_FILE = path.join(__dirname, '..', 'api-keys.json');
 
 // Carrega dados do arquivo
 function loadData() {
