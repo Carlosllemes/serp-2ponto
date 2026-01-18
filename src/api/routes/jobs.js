@@ -96,7 +96,7 @@ router.get('/jobs/:job_id', authMiddleware, (req, res) => {
         return res.status(403).json({ error: 'Acesso negado a este job' });
     }
 
-    res.json({
+    const response = {
         job_id: job.id,
         domain: job.domain,
         status: job.status,
@@ -106,7 +106,14 @@ router.get('/jobs/:job_id', authMiddleware, (req, res) => {
         updated: job.updated,
         startedAt: job.startedAt,
         completedAt: job.completedAt
-    });
+    };
+
+    // Adiciona URL de download se CSV foi gerado
+    if (job.csvFile) {
+        response.csv_download = `/results/${job.csvFile}`;
+    }
+
+    res.json(response);
 });
 
 /**
@@ -132,7 +139,8 @@ router.get('/jobs', authMiddleware, (req, res) => {
             status: job.status,
             progress: job.progress,
             created: job.created,
-            completedAt: job.completedAt
+            completedAt: job.completedAt,
+            csv_download: job.csvFile ? `/results/${job.csvFile}` : null
         }))
     });
 });

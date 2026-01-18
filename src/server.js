@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
 
@@ -49,6 +50,10 @@ const swaggerSpec = swaggerJsdoc(swaggerOptions);
 // Middlewares
 app.use(cors());
 app.use(express.json());
+
+// Servir arquivos estáticos (CSVs públicos)
+app.use('/results', express.static(path.join(__dirname, '..', 'public', 'results')));
+
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Rate limiting em rotas /api

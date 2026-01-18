@@ -1,12 +1,73 @@
 const { checkKeywordRanking } = require('./services/keyword-ranking/ranking-scraper');
 const jobManager = require('./job-manager');
 const metrics = require('./metrics');
+const fs = require('fs');
+const path = require('path');
 
 const CONCURRENT_LIMIT = 5; // Máximo de keywords processando simultaneamente
 const DELAY_BETWEEN_KEYWORDS = 2000; // 2s entre cada keyword
+const RESULTS_DIR = path.join(__dirname, '..', 'public', 'results');
 
 let isProcessing = false;
 let activeProcesses = 0;
+
+// Garante que diretório de resultados existe
+if (!fs.existsSync(RESULTS_DIR)) {
+    fs.mkdirSync(RESULTS_DIR, { recursive: true });
+}
+
+// Gera CSV dos resultados
+function generateCSV(job, results) {
+    const csvLines = [
+        'Keyword,Position,URL,Page,Status,Processed At'
+    ];
+
+    results.forEach(result => {
+        const keyword = `"${result.keyword.replace(/"/g, '""')}"`;
+        const position = result.position || (result.error ? 'Error' : 'N/A');
+        const url = result.url ? `"${result.url}"` : '';
+        const page = result.page || '';
+        const status = result.error ? 'Failed' : 'Success';
+        const processedAt = result.processedAt || '';
+
+        csvLines.push(`${keyword},${position},${url},${page},${status},${processedAt}`);
+    });
+
+    const filename = `${job.id}.csv`;
+    const filepath = path.join(RESULTS_DIR, filename);
+    
+    fs.writeFileSync(filepath, csvLines.join('\n'), 'utf8');
+    
+    return filename;
+}
+
+// Limpa arquivos antigos (mais de 2 dias)
+function cleanOldFiles() {
+    try {
+        const files = fs.readdirSync(RESULTS_DIR);
+        const twoDaysAgo = Date.now() - (2 * 24 * 60 * 60 * 1000);
+        let cleaned = 0;
+
+        files.forEach(file => {
+            const filepath = path.join(RESULTS_DIR, file);
+            const stats = fs.statSync(filepath);
+            
+            if (stats.mtimeMs < twoDaysAgo) {
+                fs.unlinkSync(filepath);
+                cleaned++;
+            }
+        });
+
+        if (cleaned > 0) {
+            console.log(`🗑️ Limpeza: ${cleaned} arquivos CSV antigos removidos`);
+        }
+
+        return cleaned;
+    } catch (error) {
+        console.error('Erro ao limpar arquivos:', error.message);
+        return 0;
+    }
+}
 
 // Processa um job
 async function processJob(job, captchaApiKey) {
@@ -101,10 +162,13 @@ async function processJob(job, captchaApiKey) {
     }
 
     // Job completo
+    const csvFilename = generateCSV(job, results);
+    
     jobManager.updateJob(job.id, {
         status: 'completed',
         completedAt: new Date().toISOString(),
-        results: results
+        results: results,
+        csvFile: csvFilename
     });
 
     // Registra métricas
@@ -118,6 +182,7 @@ async function processJob(job, captchaApiKey) {
     });
 
     console.log(`[Worker] ✅ Job ${job.id} completo: ${successCount} sucesso, ${failCount} falhas, ${captchasSolved} CAPTCHAs resolvidos`);
+    console.log(`[Worker] 📄 CSV gerado: ${csvFilename}`);
 }
 
 // Loop principal do worker
@@ -131,6 +196,14 @@ async function startWorker(captchaApiKey) {
     setInterval(() => {
         jobManager.cleanOldJobs();
     }, 60 * 60 * 1000);
+
+    // Limpa arquivos CSV antigos a cada 6h
+    setInterval(() => {
+        cleanOldFiles();
+    }, 6 * 60 * 60 * 1000);
+
+    // Limpa imediatamente na inicialização
+    cleanOldFiles();
 
     while (isProcessing) {
         try {

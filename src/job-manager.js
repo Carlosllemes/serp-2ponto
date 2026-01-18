@@ -49,7 +49,8 @@ function createJob(company, domain, keywords) {
         created: new Date().toISOString(),
         updated: new Date().toISOString(),
         startedAt: null,
-        completedAt: null
+        completedAt: null,
+        csvFile: null
     };
     
     saveJobs(data);
@@ -135,16 +136,16 @@ function getNextPendingJob() {
     return pending[0] || null;
 }
 
-// Limpa jobs antigos (completos há mais de 24h)
+// Limpa jobs antigos (completos há mais de 2 dias)
 function cleanOldJobs() {
     const data = loadJobs();
-    const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
+    const twoDaysAgo = Date.now() - (2 * 24 * 60 * 60 * 1000);
     let cleaned = 0;
     
     for (const [jobId, job] of Object.entries(data.jobs)) {
         if (job.status === 'completed' && job.completedAt) {
             const completedTime = new Date(job.completedAt).getTime();
-            if (completedTime < oneDayAgo) {
+            if (completedTime < twoDaysAgo) {
                 delete data.jobs[jobId];
                 cleaned++;
             }

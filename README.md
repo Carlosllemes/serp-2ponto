@@ -34,6 +34,7 @@ API para extrair links indexados e verificar ranking de keywords no Google.
 |----------|-----------|
 | GET `/health` | Health check |
 | GET `/docs` | Swagger UI |
+| GET `/results/:filename.csv` | Download CSV (público) |
 
 ## Deploy
 
@@ -166,8 +167,22 @@ curl -H "x-api-key: API_KEY" \
     "total": 3
   },
   "results": [...],
-  "completedAt": "2026-01-18T22:04:30Z"
+  "completedAt": "2026-01-18T22:04:30Z",
+  "csv_download": "/results/job_1737234567890_a1b2c3d4.csv"
 }
+```
+
+**Baixar CSV (sem autenticação):**
+```bash
+curl -O "https://serp.clemes.dev/results/job_1737234567890_a1b2c3d4.csv"
+```
+
+**Formato CSV:**
+```csv
+Keyword,Position,URL,Page,Status,Processed At
+"palavra 1",15,"https://example.com/page1",2,Success,2026-01-18T22:00:00Z
+"palavra 2",+100,,,Success,2026-01-18T22:02:00Z
+"palavra 3",1,"https://example.com/",1,Success,2026-01-18T22:04:00Z
 ```
 
 ### Admin: Ver métricas
@@ -213,14 +228,19 @@ curl -X POST -H "x-admin-key: ADMIN_KEY" \
 - Até 500 keywords por job
 - Processamento em background
 - 5 keywords simultâneas (paralelismo)
-- Resultados salvos por 24h
-- Limpeza automática de jobs antigos
+- **CSV gerado automaticamente quando completa**
+- **Download público (sem autenticação)**
+- **Arquivos mantidos por 2 dias**
+- Limpeza automática de jobs e CSVs antigos
 
 ### Como funciona
 1. Cria job com `POST /api/jobs/ranking`
 2. Recebe `job_id`
 3. Consulta progresso com `GET /api/jobs/:job_id`
-4. Quando `status: "completed"`, todos os resultados estão em `results`
+4. Quando `status: "completed"`:
+   - Todos resultados em `results`
+   - Campo `csv_download` com URL pública
+   - Baixa CSV sem autenticação
 
 ### Status dos jobs
 - `pending`: Aguardando processamento
