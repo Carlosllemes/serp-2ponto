@@ -2,6 +2,7 @@
 
 # Script de deploy com Docker
 # Uso: chmod +x deploy-docker.sh && ./deploy-docker.sh
+# Ou: bash deploy-docker.sh
 
 set -e
 
@@ -10,15 +11,24 @@ echo "🐳 Deploy com Docker iniciando..."
 # =============================================
 # 1. VERIFICAR DOCKER
 # =============================================
-if ! command -v docker &> /dev/null; then
+if [ ! -x "$(which docker 2>/dev/null)" ]; then
     echo "❌ Docker não está instalado!"
     exit 1
 fi
 
-if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
+echo "✅ Docker encontrado: $(which docker)"
+
+# Verifica docker compose (v2) ou docker-compose (v1)
+if docker compose version >/dev/null 2>&1; then
+    COMPOSE_CMD="docker compose"
+elif docker-compose version >/dev/null 2>&1; then
+    COMPOSE_CMD="docker-compose"
+else
     echo "❌ Docker Compose não está instalado!"
     exit 1
 fi
+
+echo "✅ Docker Compose: $COMPOSE_CMD"
 
 # =============================================
 # 2. PARAR CONTAINER EXISTENTE
@@ -39,13 +49,13 @@ docker build -t serp-2ponto:latest .
 echo "▶️  Iniciando container..."
 
 # Verifica se rede do Traefik existe
-if docker network ls | grep -q traefik-network; then
+if docker network ls | grep -q "network"; then
     echo "Usando docker-compose.yml (com Traefik)..."
-    docker compose up -d
+    $COMPOSE_CMD up -d
 else
-    echo "Rede traefik-network não encontrada."
+    echo "Rede 'network' não encontrada."
     echo "Usando docker-compose.simple.yml (acesso direto pela porta 3010)..."
-    docker compose -f docker-compose.simple.yml up -d
+    $COMPOSE_CMD -f docker-compose.simple.yml up -d
 fi
 
 # =============================================
