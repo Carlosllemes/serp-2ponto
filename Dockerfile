@@ -1,4 +1,5 @@
 # Dockerfile para SERP-2ponto API
+# Usa imagem oficial do Playwright que já tem browsers instalados
 FROM mcr.microsoft.com/playwright:v1.52.0-noble
 
 # Diretório de trabalho
@@ -7,14 +8,11 @@ WORKDIR /app
 # Copia package.json e package-lock.json
 COPY package*.json ./
 
-# Instala dependências
-RUN npm ci --only=production
+# Instala dependências (incluindo playwright)
+RUN npm install
 
 # Copia o resto do código
 COPY . .
-
-# Instala apenas o Chromium (já vem no image base, mas garante)
-RUN npx playwright install chromium
 
 # Cria diretório de logs
 RUN mkdir -p logs
