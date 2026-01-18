@@ -1,12 +1,11 @@
 #!/bin/bash
 
-# Script de deploy com Docker
+# Script de deploy com Docker Swarm
 # Uso: chmod +x deploy-docker.sh && ./deploy-docker.sh
-# Ou: bash deploy-docker.sh
 
 set -e
 
-echo "🐳 Deploy com Docker iniciando..."
+echo "🐳 Deploy com Docker Swarm iniciando..."
 
 # =============================================
 # 1. VERIFICAR DOCKER
@@ -18,69 +17,50 @@ fi
 
 echo "✅ Docker encontrado: $(which docker)"
 
-# Verifica docker compose (v2) ou docker-compose (v1)
-if docker compose version >/dev/null 2>&1; then
-    COMPOSE_CMD="docker compose"
-elif docker-compose version >/dev/null 2>&1; then
-    COMPOSE_CMD="docker-compose"
-else
-    echo "❌ Docker Compose não está instalado!"
-    exit 1
-fi
-
-echo "✅ Docker Compose: $COMPOSE_CMD"
-
 # =============================================
-# 2. PARAR CONTAINER EXISTENTE
-# =============================================
-echo "🔄 Parando container existente (se houver)..."
-docker stop serp-2ponto 2>/dev/null || true
-docker rm serp-2ponto 2>/dev/null || true
-
-# =============================================
-# 3. BUILD DA IMAGEM
+# 2. BUILD DA IMAGEM
 # =============================================
 echo "🔨 Construindo imagem Docker..."
 docker build -t serp-2ponto:latest .
 
 # =============================================
-# 4. INICIAR COM DOCKER COMPOSE
+# 3. REMOVER STACK EXISTENTE (se houver)
 # =============================================
-echo "▶️  Iniciando container..."
+echo "🔄 Removendo stack existente (se houver)..."
+docker stack rm serp 2>/dev/null || true
+sleep 5
 
-# Verifica se rede do Traefik existe
-if docker network ls | grep -q "network_public"; then
-    echo "Usando docker-compose.yml (com Traefik)..."
-    $COMPOSE_CMD up -d
-else
-    echo "Rede 'network_public' não encontrada."
-    echo "Usando docker-compose.simple.yml (acesso direto pela porta 3010)..."
-    $COMPOSE_CMD -f docker-compose.simple.yml up -d
-fi
+# =============================================
+# 4. DEPLOY COM DOCKER SWARM
+# =============================================
+echo "▶️  Fazendo deploy no Swarm..."
+docker stack deploy -c docker-compose.yml serp
 
 # =============================================
 # 5. VERIFICAÇÃO
 # =============================================
 echo ""
-echo "🔍 Verificando container..."
-sleep 3
-docker ps | grep serp-2ponto
+echo "🔍 Aguardando serviço iniciar..."
+sleep 10
 
 echo ""
-echo "📋 Logs do container:"
-docker logs serp-2ponto --tail 10
+echo "📋 Status do serviço:"
+docker service ls | grep serp
+
+echo ""
+echo "📋 Logs do serviço:"
+docker service logs serp_serp-api --tail 20 2>/dev/null || echo "Aguardando logs..."
 
 echo ""
 echo "============================================"
-echo "✅ Deploy com Docker concluído!"
+echo "✅ Deploy com Docker Swarm concluído!"
 echo "============================================"
 echo ""
 echo "🌐 API disponível em:"
-echo "   - http://localhost:3010/health"
-echo "   - http://$(curl -s ifconfig.me 2>/dev/null || echo 'SEU_IP'):3010/health"
+echo "   - https://serp.textopro.com.br/health"
 echo ""
 echo "💡 Comandos úteis:"
-echo "   docker logs serp-2ponto -f     - Ver logs em tempo real"
-echo "   docker restart serp-2ponto     - Reiniciar"
-echo "   docker stop serp-2ponto        - Parar"
-echo "   docker exec -it serp-2ponto sh - Acessar container"
+echo "   docker service ls                    - Ver serviços"
+echo "   docker service logs serp_serp-api -f - Ver logs em tempo real"
+echo "   docker service scale serp_serp-api=2 - Escalar réplicas"
+echo "   docker stack rm serp                 - Remover stack"

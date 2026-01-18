@@ -2,33 +2,30 @@ version: '3.8'
 
 services:
   serp-api:
+    image: serp-2ponto:latest
     build: .
-    container_name: serp-2ponto
-    restart: unless-stopped
+    networks:
+      - network_public
     environment:
       - NODE_ENV=production
       - PORT=3010
       # Descomente e configure a API key do CapMonster se quiser
       # - CAPMONSTER_API_KEY=sua_api_key_aqui
-    volumes:
-      - ./logs:/app/logs
-    networks:
-      - network_public
-    labels:
-      # Habilita Traefik
-      - "traefik.enable=true"
-      
-      # Rota HTTP
-      - "traefik.http.routers.serp-api.rule=Host(`serp.textopro.com.br`)"
-      - "traefik.http.routers.serp-api.entrypoints=web"
-      
-      # Rota HTTPS (descomente se usar SSL)
-      # - "traefik.http.routers.serp-api-secure.rule=Host(`serp.seudominio.com`)"
-      # - "traefik.http.routers.serp-api-secure.entrypoints=websecure"
-      # - "traefik.http.routers.serp-api-secure.tls.certresolver=letsencrypt"
-      
-      # Porta do serviço
-      - "traefik.http.services.serp-api.loadbalancer.server.port=3010"
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        order: start-first
+        delay: 2s
+      rollback_config:
+        order: stop-first
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=network_public
+        - traefik.http.routers.serp-api.rule=Host(`serp.textopro.com.br`)
+        - traefik.http.routers.serp-api.entrypoints=websecure
+        - traefik.http.routers.serp-api.tls.certresolver=letsencryptresolver
+        - traefik.http.services.serp-api.loadbalancer.server.port=3010
 
 networks:
   network_public:
