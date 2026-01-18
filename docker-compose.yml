@@ -11,8 +11,6 @@ services:
       - PORT=3010
       - ADMIN_KEY=${ADMIN_KEY:-admin_secret_key}
       - CAPMONSTER_API_KEY=${CAPMONSTER_API_KEY:-}
-    volumes:
-      - serp-data:/app/data
     deploy:
       replicas: 1
       update_config:
@@ -28,9 +26,6 @@ services:
         - traefik.http.routers.serp-api.entrypoints=websecure
         - traefik.http.routers.serp-api.tls.certresolver=letsencryptresolver
         - traefik.http.services.serp-api.loadbalancer.server.port=3010
-
-volumes:
-  serp-data:
 
 networks:
   network_public:

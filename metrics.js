@@ -1,22 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-// Usa /app/data em produção (Docker) ou diretório local
-const DATA_DIR = process.env.NODE_ENV === 'production' ? '/app/data' : __dirname;
-const METRICS_FILE = path.join(DATA_DIR, 'api-keys.json');
-
-// Garante que o diretório existe
-if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-}
-
-// Inicializa arquivo se não existir
-if (!fs.existsSync(METRICS_FILE)) {
-    fs.writeFileSync(METRICS_FILE, JSON.stringify({
-        keys: {},
-        usage: {}
-    }, null, 2));
-}
+const METRICS_FILE = path.join(__dirname, 'api-keys.json');
 
 // Carrega dados do arquivo
 function loadData() {
