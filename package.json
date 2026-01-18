@@ -1,11 +1,11 @@
 {
   "name": "serp-links",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "src/server.js",
   "scripts": {
     "dev": "node index.js",
-    "start": "node server.js",
-    "api": "node server.js",
+    "start": "node src/server.js",
+    "api": "node src/server.js",
     "install:browsers": "npx playwright install chromium",
     "postinstall": "npx playwright install chromium || true",
     "pm2:start": "pm2 start ecosystem.config.js",

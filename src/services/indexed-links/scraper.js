@@ -1,5 +1,6 @@
 const playwright = require('playwright');
-const { solveRecaptcha, extractSiteKey, injectRecaptchaToken, detectCaptcha } = require('./captcha-solver');
+const { solveRecaptcha, extractSiteKey, injectRecaptchaToken, detectCaptcha } = require('../../shared/captcha-solver');
+const { getUserAgent, randomDelay, getBrowserConfig, getContextConfig, initScript } = require('../../shared/browser-config');
 
 // Função para validar se o link pertence ao domínio (com ou sem www/subdomínios)
 function isValidUrl(href, domain) {
@@ -12,45 +13,7 @@ function isValidUrl(href, domain) {
     }
 }
 
-// Função para gerar delay aleatório
-function randomDelay(min, max) {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
-// Função para gerar user-agent atualizado
-function getUserAgent() {
-    const userAgents = [
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0'
-    ];
-    return userAgents[Math.floor(Math.random() * userAgents.length)];
-}
-
-// Função para gerar headers HTTP realistas
-function getRealisticHeaders(userAgent) {
-    return {
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-        'Accept-Encoding': 'gzip, deflate, br, zstd',
-        'Accept-Charset': 'UTF-8',
-        'Cache-Control': 'max-age=0',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
-        'Sec-Fetch-Dest': 'document',
-        'Sec-Fetch-Mode': 'navigate',
-        'Sec-Fetch-Site': 'none',
-        'Sec-Fetch-User': '?1',
-        'sec-ch-ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"Windows"',
-        'User-Agent': userAgent,
-        'DNT': '1',
-        'Referer': 'https://www.google.com/'
-    };
-}
+// Funções auxiliares agora vêm de browser-config
 
 /**
  * Extrai links do Google para um domínio específico
@@ -60,50 +23,13 @@ function getRealisticHeaders(userAgent) {
  * @returns {Promise<string[]>} Array de links encontrados
  */
 async function extractLinks(domain, proxy = null, captchaApiKey = null, onEvent = null) {
-    // Configurações otimizadas para VPS/produção com anti-detecção
     const userAgent = getUserAgent();
-    const launchOptions = {
-        headless: true, // Modo headless para VPS
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-blink-features=AutomationControlled', // Remove flag de automação
-            '--disable-features=IsolateOrigins,site-per-process',
-            '--disable-site-isolation-trials',
-            '--disable-web-security',
-            '--disable-features=BlinkGenPropertyTrees',
-            '--window-size=1920,1080',
-            '--start-maximized'
-        ]
-    };
-
-    // Configura o contexto com headers e configurações realistas
-    const contextOptions = {
-        userAgent: userAgent,
-        viewport: { width: 1920, height: 1080 }, // Viewport mais comum
-        locale: 'pt-BR',
-        timezoneId: 'America/Sao_Paulo',
-        geolocation: { latitude: -23.5505, longitude: -46.6333 }, // São Paulo
-        permissions: ['geolocation'],
-        colorScheme: 'light',
-        // Extra HTTP headers para parecer mais real
-        extraHTTPHeaders: getRealisticHeaders(userAgent),
-        // Simula permissões e plugins
-        hasTouch: false,
-        isMobile: false,
-        // Cookies e storage
-        storageState: undefined, // Pode ser preenchido com cookies salvos
-        // Ignora HTTPS errors se necessário
-        ignoreHTTPSErrors: false
-    };
-
-    // Adiciona proxy se fornecido
-    if (proxy) {
-        contextOptions.proxy = {
-            server: proxy
-        };
-    }
+    const launchOptions = getBrowserConfig(proxy);
+    const contextOptions = getContextConfig(userAgent);
+    
+    // Geolocation para Brasil
+    contextOptions.geolocation = { latitude: -23.5505, longitude: -46.6333 };
+    contextOptions.permissions = ['geolocation'];
 
     let browser;
     try {
@@ -121,35 +47,8 @@ async function extractLinks(domain, proxy = null, captchaApiKey = null, onEvent 
     const page = await context.newPage();
 
     // Remove propriedades que indicam automação
-    await page.addInitScript(() => {
-        // Remove webdriver flag
-        Object.defineProperty(navigator, 'webdriver', {
-            get: () => undefined
-        });
-
-        // Sobrescreve plugins para parecer real
-        Object.defineProperty(navigator, 'plugins', {
-            get: () => [1, 2, 3, 4, 5]
-        });
-
-        // Sobrescreve languages
-        Object.defineProperty(navigator, 'languages', {
-            get: () => ['pt-BR', 'pt', 'en-US', 'en']
-        });
-
-        // Chrome runtime
-        window.chrome = {
-            runtime: {}
-        };
-
-        // Permissões
-        const originalQuery = window.navigator.permissions.query;
-        window.navigator.permissions.query = (parameters) => (
-            parameters.name === 'notifications' ?
-                Promise.resolve({ state: Notification.permission }) :
-                originalQuery(parameters)
-        );
-    });
+    // Script anti-detecção
+    await page.addInitScript(initScript);
 
     try {
         // Navega para o Google com headers melhorados
