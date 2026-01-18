@@ -6,13 +6,19 @@ const swaggerUi = require('swagger-ui-express');
 const limiter = require('./api/middleware/rate-limit');
 const indexedLinksRoutes = require('./api/routes/indexed-links');
 const keywordRankingRoutes = require('./api/routes/keyword-ranking');
+const jobsRoutes = require('./api/routes/jobs');
 const adminRoutes = require('./api/routes/admin');
+const { startWorker } = require('./job-worker');
 
 const app = express();
 const PORT = process.env.PORT || 3010;
+const CAPMONSTER_API_KEY = process.env.CAPMONSTER_API_KEY;
 
 // Trust proxy (necessário quando atrás de Traefik/nginx)
 app.set('trust proxy', true);
+
+// Inicia worker de jobs em background
+startWorker(CAPMONSTER_API_KEY);
 
 // Swagger config
 const swaggerOptions = {
@@ -65,6 +71,7 @@ app.get('/health', (req, res) => {
 // Rotas
 app.use('/api', indexedLinksRoutes);
 app.use('/api', keywordRankingRoutes);
+app.use('/api', jobsRoutes);
 app.use('/admin', adminRoutes);
 
 app.listen(PORT, () => {

@@ -1,5 +1,6 @@
 const express = require('express');
 const metrics = require('../../metrics');
+const jobManager = require('../../job-manager');
 const { adminAuth } = require('../middleware/auth');
 
 const router = express.Router();
@@ -144,6 +145,97 @@ router.delete('/keys/:apiKey', adminAuth, (req, res) => {
         res.json({ message: 'API Key desativada' });
     } else {
         res.status(404).json({ error: 'API Key não encontrada' });
+    }
+});
+
+// ==================== ADMIN JOBS ====================
+
+/**
+ * @swagger
+ * /admin/jobs:
+ *   get:
+ *     tags: [Admin]
+ *     summary: Lista todos os jobs
+ *     security:
+ *       - AdminKeyAuth: []
+ *     responses:
+ *       200:
+ *         description: Lista de jobs
+ */
+router.get('/jobs', adminAuth, (req, res) => {
+    const jobs = jobManager.getAllJobs();
+    res.json({
+        total: jobs.length,
+        jobs: jobs.map(job => ({
+            job_id: job.id,
+            company: job.company,
+            domain: job.domain,
+            status: job.status,
+            progress: job.progress,
+            keywords_count: job.keywords.length,
+            created: job.created,
+            completedAt: job.completedAt
+        }))
+    });
+});
+
+/**
+ * @swagger
+ * /admin/jobs/{job_id}:
+ *   get:
+ *     tags: [Admin]
+ *     summary: Detalhes de um job
+ *     security:
+ *       - AdminKeyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: job_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Detalhes do job
+ *       404:
+ *         description: Job não encontrado
+ */
+router.get('/jobs/:job_id', adminAuth, (req, res) => {
+    const job = jobManager.getJob(req.params.job_id);
+    
+    if (!job) {
+        return res.status(404).json({ error: 'Job não encontrado' });
+    }
+    
+    res.json(job);
+});
+
+/**
+ * @swagger
+ * /admin/jobs/{job_id}:
+ *   delete:
+ *     tags: [Admin]
+ *     summary: Deleta um job
+ *     security:
+ *       - AdminKeyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: job_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Job deletado
+ *       404:
+ *         description: Job não encontrado
+ */
+router.delete('/jobs/:job_id', adminAuth, (req, res) => {
+    const success = jobManager.deleteJob(req.params.job_id);
+    
+    if (success) {
+        res.json({ message: 'Job deletado' });
+    } else {
+        res.status(404).json({ error: 'Job não encontrado' });
     }
 });
 
