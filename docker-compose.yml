@@ -13,7 +13,7 @@ services:
     volumes:
       - ./logs:/app/logs
     networks:
-      - traefik-network
+      - network
     labels:
       # Habilita Traefik
       - "traefik.enable=true"
