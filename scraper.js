@@ -254,6 +254,23 @@ async function extractLinks(domain, proxy = null, captchaApiKey = null) {
         
         // Log da URL atual
         console.log(`📍 URL atual: ${page.url()}`);
+        
+        // Log do título da página
+        const pageTitle = await page.title();
+        console.log(`📄 Título da página: ${pageTitle}`);
+        
+        // Log do HTML para debug (primeiros 500 caracteres)
+        const bodyText = await page.evaluate(() => document.body.innerText.substring(0, 500));
+        console.log(`📝 Texto da página (primeiros 500 chars): ${bodyText.replace(/\n/g, ' ').substring(0, 300)}`);
+        
+        // Verificar se há resultados de busca
+        const hasSearchResults = await page.locator('#search').count();
+        console.log(`🔍 Elemento #search encontrado: ${hasSearchResults > 0 ? 'SIM' : 'NÃO'}`);
+        
+        // Verificar se é página de CAPTCHA
+        const hasCaptchaForm = await page.locator('form#captcha-form').count();
+        const hasRecaptcha = await page.locator('iframe[src*="recaptcha"]').count();
+        console.log(`🤖 CAPTCHA form: ${hasCaptchaForm > 0}, reCAPTCHA iframe: ${hasRecaptcha > 0}`);
 
         // Verifica e resolve CAPTCHA se necessário
         const hasCaptcha = await detectCaptcha(page);
