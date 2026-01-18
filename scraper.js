@@ -243,6 +243,17 @@ async function extractLinks(domain, proxy = null, captchaApiKey = null) {
         await page.keyboard.press('Enter');
         await page.waitForLoadState('networkidle', { timeout: 30000 });
         console.log(`Pesquisa realizada para: ${domain}`);
+        
+        // Screenshot de debug após a busca
+        try {
+            await page.screenshot({ path: '/app/logs/debug_after_search.png', fullPage: true });
+            console.log("📸 Screenshot de debug salvo em /app/logs/debug_after_search.png");
+        } catch (e) {
+            console.log("Não foi possível salvar screenshot de debug");
+        }
+        
+        // Log da URL atual
+        console.log(`📍 URL atual: ${page.url()}`);
 
         // Verifica e resolve CAPTCHA se necessário
         const hasCaptcha = await detectCaptcha(page);
@@ -292,6 +303,12 @@ async function extractLinks(domain, proxy = null, captchaApiKey = null) {
                     .filter(href => href.startsWith('http'));
             });
 
+            // Log todos os links encontrados para debug
+            console.log(`🔗 Links brutos encontrados na página: ${links.length}`);
+            if (links.length > 0) {
+                console.log(`   Primeiros 3: ${links.slice(0, 3).join(', ')}`);
+            }
+
             // Filtra links válidos para o domínio
             links.forEach(href => {
                 if (isValidUrl(href, domain)) {
@@ -299,7 +316,7 @@ async function extractLinks(domain, proxy = null, captchaApiKey = null) {
                 }
             });
 
-            console.log(`Links encontrados até agora: ${allLinks.size}`);
+            console.log(`✅ Links válidos para ${domain}: ${allLinks.size}`);
 
             // Verifica se há botão "Próximo"
             const nextButton = await page.locator('a[id="pnnext"]');
