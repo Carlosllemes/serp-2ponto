@@ -1,0 +1,76 @@
+#!/bin/bash
+
+# Script de deploy com Docker
+# Uso: chmod +x deploy-docker.sh && ./deploy-docker.sh
+
+set -e
+
+echo "🐳 Deploy com Docker iniciando..."
+
+# =============================================
+# 1. VERIFICAR DOCKER
+# =============================================
+if ! command -v docker &> /dev/null; then
+    echo "❌ Docker não está instalado!"
+    exit 1
+fi
+
+if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
+    echo "❌ Docker Compose não está instalado!"
+    exit 1
+fi
+
+# =============================================
+# 2. PARAR CONTAINER EXISTENTE
+# =============================================
+echo "🔄 Parando container existente (se houver)..."
+docker stop serp-2ponto 2>/dev/null || true
+docker rm serp-2ponto 2>/dev/null || true
+
+# =============================================
+# 3. BUILD DA IMAGEM
+# =============================================
+echo "🔨 Construindo imagem Docker..."
+docker build -t serp-2ponto:latest .
+
+# =============================================
+# 4. INICIAR COM DOCKER COMPOSE
+# =============================================
+echo "▶️  Iniciando container..."
+
+# Verifica se rede do Traefik existe
+if docker network ls | grep -q traefik-network; then
+    echo "Usando docker-compose.yml (com Traefik)..."
+    docker compose up -d
+else
+    echo "Rede traefik-network não encontrada."
+    echo "Usando docker-compose.simple.yml (acesso direto pela porta 3010)..."
+    docker compose -f docker-compose.simple.yml up -d
+fi
+
+# =============================================
+# 5. VERIFICAÇÃO
+# =============================================
+echo ""
+echo "🔍 Verificando container..."
+sleep 3
+docker ps | grep serp-2ponto
+
+echo ""
+echo "📋 Logs do container:"
+docker logs serp-2ponto --tail 10
+
+echo ""
+echo "============================================"
+echo "✅ Deploy com Docker concluído!"
+echo "============================================"
+echo ""
+echo "🌐 API disponível em:"
+echo "   - http://localhost:3010/health"
+echo "   - http://$(curl -s ifconfig.me 2>/dev/null || echo 'SEU_IP'):3010/health"
+echo ""
+echo "💡 Comandos úteis:"
+echo "   docker logs serp-2ponto -f     - Ver logs em tempo real"
+echo "   docker restart serp-2ponto     - Reiniciar"
+echo "   docker stop serp-2ponto        - Parar"
+echo "   docker exec -it serp-2ponto sh - Acessar container"

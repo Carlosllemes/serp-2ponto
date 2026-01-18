@@ -1,0 +1,17 @@
+# docker-compose simples (sem Traefik, acesso direto pela porta)
+version: '3.8'
+
+services:
+  serp-api:
+    build: .
+    container_name: serp-2ponto
+    restart: unless-stopped
+    ports:
+      - "3010:3010"
+    environment:
+      - NODE_ENV=production
+      - PORT=3010
+      # Descomente e configure a API key do CapMonster se quiser
+      # - CAPMONSTER_API_KEY=sua_api_key_aqui
+    volumes:
+      - ./logs:/app/logs
