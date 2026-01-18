@@ -22,9 +22,14 @@ const swaggerOptions = {
         servers: [{ url: `http://localhost:${PORT}` }],
         components: {
             securitySchemes: {
-                ApiKeyAuth: { type: 'apiKey', in: 'header', name: 'x-api-key' }
+                ApiKeyAuth: { type: 'apiKey', in: 'header', name: 'x-api-key' },
+                AdminKeyAuth: { type: 'apiKey', in: 'header', name: 'x-admin-key' }
             }
-        }
+        },
+        tags: [
+            { name: 'API', description: 'Endpoints de extração' },
+            { name: 'Admin', description: 'Endpoints administrativos' }
+        ]
     },
     apis: ['./server.js']
 };
@@ -75,6 +80,7 @@ const adminAuth = (req, res, next) => {
  * @swagger
  * /health:
  *   get:
+ *     tags: [API]
  *     summary: Health check
  *     responses:
  *       200:
@@ -88,6 +94,7 @@ app.get('/health', (req, res) => {
  * @swagger
  * /api/extract-links:
  *   post:
+ *     tags: [API]
  *     summary: Extrai links indexados no Google
  *     security:
  *       - ApiKeyAuth: []
@@ -151,6 +158,7 @@ app.post('/api/extract-links', authMiddleware, async (req, res) => {
  * @swagger
  * /api/extract-links:
  *   get:
+ *     tags: [API]
  *     summary: Extrai links (via GET)
  *     security:
  *       - ApiKeyAuth: []
@@ -203,7 +211,45 @@ app.get('/api/extract-links', authMiddleware, async (req, res) => {
 
 // ==================== ADMIN ENDPOINTS ====================
 
-// Listar métricas de uma empresa
+/**
+ * @swagger
+ * /admin/metrics:
+ *   get:
+ *     tags: [Admin]
+ *     summary: Lista métricas de todas as empresas
+ *     security:
+ *       - AdminKeyAuth: []
+ *     responses:
+ *       200:
+ *         description: Métricas de uso
+ *       403:
+ *         description: Acesso negado
+ */
+app.get('/admin/metrics', adminAuth, (req, res) => {
+    res.json(metrics.getAllMetrics());
+});
+
+/**
+ * @swagger
+ * /admin/metrics/{company}:
+ *   get:
+ *     tags: [Admin]
+ *     summary: Métricas de uma empresa específica
+ *     security:
+ *       - AdminKeyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: company
+ *         required: true
+ *         schema:
+ *           type: string
+ *         example: grupoideal
+ *     responses:
+ *       200:
+ *         description: Métricas da empresa
+ *       404:
+ *         description: Empresa não encontrada
+ */
 app.get('/admin/metrics/:company', adminAuth, (req, res) => {
     const data = metrics.getMetrics(req.params.company);
     if (!data) {
@@ -212,17 +258,52 @@ app.get('/admin/metrics/:company', adminAuth, (req, res) => {
     res.json({ company: req.params.company, ...data });
 });
 
-// Listar todas as métricas
-app.get('/admin/metrics', adminAuth, (req, res) => {
-    res.json(metrics.getAllMetrics());
-});
-
-// Listar API Keys
+/**
+ * @swagger
+ * /admin/keys:
+ *   get:
+ *     tags: [Admin]
+ *     summary: Lista todas as API Keys
+ *     security:
+ *       - AdminKeyAuth: []
+ *     responses:
+ *       200:
+ *         description: Lista de API Keys
+ */
 app.get('/admin/keys', adminAuth, (req, res) => {
     res.json(metrics.listApiKeys());
 });
 
-// Criar nova API Key
+/**
+ * @swagger
+ * /admin/keys:
+ *   post:
+ *     tags: [Admin]
+ *     summary: Cria nova API Key
+ *     security:
+ *       - AdminKeyAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - company
+ *               - name
+ *             properties:
+ *               company:
+ *                 type: string
+ *                 example: grupoideal
+ *               name:
+ *                 type: string
+ *                 example: Grupo Ideal
+ *     responses:
+ *       200:
+ *         description: API Key criada
+ *       400:
+ *         description: Campos obrigatórios ausentes
+ */
 app.post('/admin/keys', adminAuth, (req, res) => {
     const { company, name } = req.body;
     
@@ -243,7 +324,26 @@ app.post('/admin/keys', adminAuth, (req, res) => {
     });
 });
 
-// Desativar API Key
+/**
+ * @swagger
+ * /admin/keys/{apiKey}:
+ *   delete:
+ *     tags: [Admin]
+ *     summary: Desativa uma API Key
+ *     security:
+ *       - AdminKeyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: apiKey
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: API Key desativada
+ *       404:
+ *         description: API Key não encontrada
+ */
 app.delete('/admin/keys/:apiKey', adminAuth, (req, res) => {
     const success = metrics.deactivateApiKey(req.params.apiKey);
     

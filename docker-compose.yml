@@ -9,7 +9,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3010
-      - ADMIN_KEY=${ADMIN_KEY:-admin_secret_key}
+      - ADMIN_KEY=${ADMIN_KEY:-e2fc9813d8741e3ce1fc09b100f52442}
       - CAPMONSTER_API_KEY=${CAPMONSTER_API_KEY:-}
     deploy:
       replicas: 1
