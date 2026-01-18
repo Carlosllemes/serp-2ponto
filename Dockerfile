@@ -14,6 +14,9 @@ RUN npm install
 # Copia o resto do código
 COPY . .
 
+# Cria arquivo de métricas se não existir
+RUN touch api-keys.json || true
+
 # Cria diretório de logs
 RUN mkdir -p logs
 

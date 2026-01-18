@@ -1,0 +1,20 @@
+{
+  "keys": {
+    "gid_2024_xK9mN3pL": {
+      "company": "grupoideal",
+      "name": "Grupo Ideal",
+      "created": "2026-01-18",
+      "active": true
+    }
+  },
+  "usage": {
+    "grupoideal": {
+      "requests": 1,
+      "captchasSolved": 0,
+      "successfulExtractions": 1,
+      "failedExtractions": 0,
+      "totalLinksExtracted": 0,
+      "lastRequest": "2026-01-18T21:05:46.967Z"
+    }
+  }
+}

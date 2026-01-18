@@ -59,7 +59,7 @@ function getRealisticHeaders(userAgent) {
  * @param {string} captchaApiKey - API Key do CapMonster (opcional, mas necessário se houver CAPTCHA)
  * @returns {Promise<string[]>} Array de links encontrados
  */
-async function extractLinks(domain, proxy = null, captchaApiKey = null) {
+async function extractLinks(domain, proxy = null, captchaApiKey = null, onEvent = null) {
     // Configurações otimizadas para VPS/produção com anti-detecção
     const userAgent = getUserAgent();
     const launchOptions = {
@@ -275,6 +275,9 @@ async function extractLinks(domain, proxy = null, captchaApiKey = null) {
                     
                     await injectRecaptchaToken(page, token);
                     console.log("✅ Token do CAPTCHA injetado. Aguardando validação...");
+                    
+                    // Notifica que CAPTCHA foi resolvido
+                    if (onEvent) onEvent('captcha_solved');
                     
                     // Aguarda a página processar o token
                     await page.waitForTimeout(3000);

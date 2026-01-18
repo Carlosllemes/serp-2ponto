@@ -1,98 +1,260 @@
 const express = require('express');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
+const swaggerJsdoc = require('swagger-jsdoc');
+const swaggerUi = require('swagger-ui-express');
 const { extractLinks } = require('./scraper');
+const metrics = require('./metrics');
 
 const app = express();
 const PORT = process.env.PORT || 3010;
+const ADMIN_KEY = process.env.ADMIN_KEY || 'admin_secret_key';
 
+// Swagger config
+const swaggerOptions = {
+    definition: {
+        openapi: '3.0.0',
+        info: {
+            title: 'SERP Links API',
+            version: '1.0.0',
+            description: 'API para extrair links indexados no Google'
+        },
+        servers: [{ url: `http://localhost:${PORT}` }],
+        components: {
+            securitySchemes: {
+                ApiKeyAuth: { type: 'apiKey', in: 'header', name: 'x-api-key' }
+            }
+        }
+    },
+    apis: ['./server.js']
+};
+
+const swaggerSpec = swaggerJsdoc(swaggerOptions);
+
+// Middlewares
 app.use(cors());
 app.use(express.json());
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-// Endpoint principal para extrair links
-app.post('/api/extract-links', async (req, res) => {
-    try {
-        const { domain, proxy, captchaApiKey } = req.body;
-        
-        // Usa API key do body ou variável de ambiente
-        const apiKey = captchaApiKey || process.env.CAPMONSTER_API_KEY;
-
-        if (!domain) {
-            return res.status(400).json({ 
-                error: 'O parâmetro "domain" é obrigatório' 
-            });
-        }
-
-        console.log(`Iniciando extração de links para: ${domain}`);
-        if (proxy) {
-            console.log(`Usando proxy: ${proxy}`);
-        }
-        if (apiKey) {
-            console.log(`CapMonster API Key configurada`);
-        }
-
-        const links = await extractLinks(domain, proxy, apiKey);
-
-        res.json({
-            success: true,
-            domain,
-            totalLinks: links.length,
-            links
-        });
-    } catch (error) {
-        console.error('Erro ao extrair links:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
+// Rate limiting: 10 req/min por IP
+const limiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 10,
+    message: { error: 'Rate limit excedido. Aguarde 1 minuto.' }
 });
+app.use('/api', limiter);
 
-// Endpoint GET para facilitar testes
-app.get('/api/extract-links', async (req, res) => {
-    try {
-        const { domain, proxy, captchaApiKey } = req.query;
-        
-        // Usa API key do query ou variável de ambiente
-        const apiKey = captchaApiKey || process.env.CAPMONSTER_API_KEY;
-
-        if (!domain) {
-            return res.status(400).json({ 
-                error: 'O parâmetro "domain" é obrigatório. Exemplo: /api/extract-links?domain=example.com' 
-            });
-        }
-
-        console.log(`Iniciando extração de links para: ${domain}`);
-        if (proxy) {
-            console.log(`Usando proxy: ${proxy}`);
-        }
-        if (apiKey) {
-            console.log(`CapMonster API Key configurada`);
-        }
-
-        const links = await extractLinks(domain, proxy, apiKey);
-
-        res.json({
-            success: true,
-            domain,
-            totalLinks: links.length,
-            links
-        });
-    } catch (error) {
-        console.error('Erro ao extrair links:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
+// Auth middleware
+const authMiddleware = (req, res, next) => {
+    const apiKey = req.headers['x-api-key'];
+    
+    if (!apiKey) {
+        return res.status(401).json({ error: 'API Key ausente. Envie no header x-api-key' });
     }
-});
+    
+    const keyData = metrics.validateApiKey(apiKey);
+    if (!keyData) {
+        return res.status(401).json({ error: 'API Key inválida ou desativada' });
+    }
+    
+    req.company = keyData.company;
+    req.companyName = keyData.name;
+    next();
+};
 
-// Endpoint de saúde
+// Admin auth
+const adminAuth = (req, res, next) => {
+    const key = req.headers['x-admin-key'];
+    if (key !== ADMIN_KEY) {
+        return res.status(403).json({ error: 'Acesso negado' });
+    }
+    next();
+};
+
+/**
+ * @swagger
+ * /health:
+ *   get:
+ *     summary: Health check
+ *     responses:
+ *       200:
+ *         description: OK
+ */
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok' });
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+/**
+ * @swagger
+ * /api/extract-links:
+ *   post:
+ *     summary: Extrai links indexados no Google
+ *     security:
+ *       - ApiKeyAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - domain
+ *             properties:
+ *               domain:
+ *                 type: string
+ *                 example: example.com
+ *     responses:
+ *       200:
+ *         description: Links extraídos
+ *       401:
+ *         description: API Key inválida
+ */
+app.post('/api/extract-links', authMiddleware, async (req, res) => {
+    const { domain } = req.body;
+    const captchaApiKey = process.env.CAPMONSTER_API_KEY;
+    let captchaSolved = false;
+
+    if (!domain) {
+        return res.status(400).json({ error: 'Parâmetro "domain" obrigatório' });
+    }
+
+    console.log(`[${new Date().toISOString()}] [${req.company}] Extraindo: ${domain}`);
+
+    try {
+        const links = await extractLinks(domain, null, captchaApiKey, (event) => {
+            if (event === 'captcha_solved') captchaSolved = true;
+        });
+
+        // Registra métricas
+        metrics.logRequest(req.company, {
+            success: true,
+            captchaSolved,
+            linksCount: links.length
+        });
+
+        res.json({
+            success: true,
+            domain,
+            totalLinks: links.length,
+            links
+        });
+    } catch (error) {
+        console.error(`[${new Date().toISOString()}] [${req.company}] Erro:`, error.message);
+        
+        metrics.logRequest(req.company, { failed: true, captchaSolved });
+        
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * @swagger
+ * /api/extract-links:
+ *   get:
+ *     summary: Extrai links (via GET)
+ *     security:
+ *       - ApiKeyAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: domain
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Links extraídos
+ */
+app.get('/api/extract-links', authMiddleware, async (req, res) => {
+    const { domain } = req.query;
+    const captchaApiKey = process.env.CAPMONSTER_API_KEY;
+    let captchaSolved = false;
+
+    if (!domain) {
+        return res.status(400).json({ error: 'Parâmetro "domain" obrigatório' });
+    }
+
+    console.log(`[${new Date().toISOString()}] [${req.company}] Extraindo: ${domain}`);
+
+    try {
+        const links = await extractLinks(domain, null, captchaApiKey, (event) => {
+            if (event === 'captcha_solved') captchaSolved = true;
+        });
+
+        metrics.logRequest(req.company, {
+            success: true,
+            captchaSolved,
+            linksCount: links.length
+        });
+
+        res.json({
+            success: true,
+            domain,
+            totalLinks: links.length,
+            links
+        });
+    } catch (error) {
+        console.error(`[${new Date().toISOString()}] [${req.company}] Erro:`, error.message);
+        
+        metrics.logRequest(req.company, { failed: true, captchaSolved });
+        
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ==================== ADMIN ENDPOINTS ====================
+
+// Listar métricas de uma empresa
+app.get('/admin/metrics/:company', adminAuth, (req, res) => {
+    const data = metrics.getMetrics(req.params.company);
+    if (!data) {
+        return res.status(404).json({ error: 'Empresa não encontrada' });
+    }
+    res.json({ company: req.params.company, ...data });
+});
+
+// Listar todas as métricas
+app.get('/admin/metrics', adminAuth, (req, res) => {
+    res.json(metrics.getAllMetrics());
+});
+
+// Listar API Keys
+app.get('/admin/keys', adminAuth, (req, res) => {
+    res.json(metrics.listApiKeys());
+});
+
+// Criar nova API Key
+app.post('/admin/keys', adminAuth, (req, res) => {
+    const { company, name } = req.body;
+    
+    if (!company || !name) {
+        return res.status(400).json({ error: 'company e name são obrigatórios' });
+    }
+    
+    // Gerar API Key
+    const apiKey = `${company.substring(0, 3)}_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+    
+    metrics.addApiKey(apiKey, company, name);
+    
+    res.json({ 
+        message: 'API Key criada',
+        apiKey,
+        company,
+        name
+    });
+});
+
+// Desativar API Key
+app.delete('/admin/keys/:apiKey', adminAuth, (req, res) => {
+    const success = metrics.deactivateApiKey(req.params.apiKey);
+    
+    if (success) {
+        res.json({ message: 'API Key desativada' });
+    } else {
+        res.status(404).json({ error: 'API Key não encontrada' });
+    }
 });
 
 app.listen(PORT, () => {
-    console.log(`🚀 Servidor rodando na porta ${PORT}`);
-    console.log(`📡 Endpoint: http://localhost:${PORT}/api/extract-links`);
-    console.log(`💡 Exemplo GET: http://localhost:${PORT}/api/extract-links?domain=example.com`);
+    console.log(`API rodando na porta ${PORT}`);
+    console.log(`Docs: http://localhost:${PORT}/docs`);
 });
