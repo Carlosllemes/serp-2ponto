@@ -130,34 +130,40 @@ async function checkKeywordRanking(domain, keyword, captchaApiKey = null, onEven
             await solveCaptchaIfNeeded();
             await page.waitForTimeout(randomDelay(900, 1600));
 
-            // Extrai todos os links orgânicos da página
+            // Extrai apenas resultados orgânicos (ignora anúncios em #tads/#tadsb)
+            // e conta por "bloco de resultado" para aproximar o ranking real.
             const resultsOnPage = await page.evaluate(() => {
-                const results = [];
-                
-                // Seletores de resultados orgânicos do Google
-                const selectors = [
-                    'div.g a[href]:not([href^="#"])',
-                    'div[data-hveid] a[href]:not([href^="#"])',
-                    'a[jsname="UWckNb"]',
-                    'div.yuRUbf a'
-                ];
-                
-                const links = new Set();
-                
-                for (const selector of selectors) {
-                    document.querySelectorAll(selector).forEach(el => {
-                        const href = el.href;
-                        if (href && 
-                            !href.includes('google.com') && 
-                            !href.includes('youtube.com') &&
-                            !href.startsWith('#') &&
-                            href.startsWith('http')) {
-                            links.add(href);
-                        }
-                    });
+                const isValidHttp = (href) =>
+                    href &&
+                    typeof href === 'string' &&
+                    href.startsWith('http') &&
+                    !href.includes('google.com') &&
+                    !href.includes('youtube.com');
+
+                // Blocos orgânicos: #search .g (padrão) e alguns layouts alternativos
+                const blocks = Array.from(document.querySelectorAll('#search .g, #search div[data-hveid]'))
+                    .filter((el) => !el.closest('#tads') && !el.closest('#tadsb'));
+
+                const urls = [];
+                const seen = new Set();
+
+                for (const block of blocks) {
+                    // Tenta pegar o link principal do resultado orgânico
+                    const a =
+                        block.querySelector('div.yuRUbf > a[href]') ||
+                        block.querySelector('a[jsname="UWckNb"][href]') ||
+                        block.querySelector('a[href]');
+
+                    const href = a && a.href;
+                    if (!isValidHttp(href)) continue;
+
+                    // Dedupe por URL (Google às vezes repete)
+                    if (seen.has(href)) continue;
+                    seen.add(href);
+                    urls.push(href);
                 }
-                
-                return Array.from(links);
+
+                return urls;
             });
 
             console.log(`  Encontrados ${resultsOnPage.length} resultados na página ${pageNum}`);
