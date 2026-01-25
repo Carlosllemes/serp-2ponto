@@ -15,22 +15,12 @@ function getUserAgent() {
 // Função para gerar headers HTTP realistas
 function getRealisticHeaders(userAgent) {
     return {
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+        // Mantém headers enxutos e coerentes.
+        // Evite setar manualmente: Accept-Encoding/Connection/sec-ch-ua/etc (podem dar mismatch com Chromium).
         'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-        'Accept-Encoding': 'gzip, deflate, br, zstd',
-        'Accept-Charset': 'UTF-8',
-        'Cache-Control': 'max-age=0',
-        'Connection': 'keep-alive',
         'Upgrade-Insecure-Requests': '1',
-        'Sec-Fetch-Dest': 'document',
-        'Sec-Fetch-Mode': 'navigate',
-        'Sec-Fetch-Site': 'none',
-        'Sec-Fetch-User': '?1',
-        'sec-ch-ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"Windows"',
-        'User-Agent': userAgent,
         'DNT': '1',
+        'Sec-GPC': '1',
     };
 }
 

@@ -1,6 +1,8 @@
 const playwright = require('playwright');
 const { solveRecaptcha, extractSiteKey, injectRecaptchaToken, detectCaptcha } = require('../../shared/captcha-solver');
 const { getUserAgent, randomDelay, getBrowserConfig, getContextConfig, initScript } = require('../../shared/browser-config');
+const { getStorageStatePath, loadStorageStateIfExists, saveStorageStateAtomic } = require('../../shared/storage-state');
+const { makeUuleFromLatLng } = require('../../shared/uule');
 
 /**
  * Verifica a posição de um domínio no Google para uma keyword
@@ -8,16 +10,24 @@ const { getUserAgent, randomDelay, getBrowserConfig, getContextConfig, initScrip
  * @param {string} keyword - Palavra-chave para buscar
  * @param {string} captchaApiKey - API Key do CapMonster (opcional)
  * @param {function} onEvent - Callback para eventos (captcha_solved)
+ * @param {string} company - Identificador da empresa (para cookies/storageState)
  * @returns {Promise<{position: string|number, url: string|null, page: number|null}>}
  */
-async function checkKeywordRanking(domain, keyword, captchaApiKey = null, onEvent = null) {
+async function checkKeywordRanking(domain, keyword, captchaApiKey = null, onEvent = null, company = 'default') {
     const userAgent = getUserAgent();
     const launchOptions = getBrowserConfig();
     const contextOptions = getContextConfig(userAgent);
     
-    // Geolocation para Brasil
-    contextOptions.geolocation = { latitude: -23.5505, longitude: -46.6333 };
+    // Centro de São Paulo (Praça da Sé / região central)
+    const spCenter = { latitude: -23.55052, longitude: -46.63331 };
+    contextOptions.geolocation = spCenter;
     contextOptions.permissions = ['geolocation'];
+    contextOptions.locale = 'pt-BR';
+    contextOptions.timezoneId = 'America/Sao_Paulo';
+
+    // Cookies/sessão por empresa
+    const statePath = getStorageStatePath('keyword-ranking', company);
+    const existingState = loadStorageStateIfExists(statePath);
 
     let browser;
     try {
@@ -31,7 +41,10 @@ async function checkKeywordRanking(domain, keyword, captchaApiKey = null, onEven
         throw error;
     }
 
-    const context = await browser.newContext(contextOptions);
+    const context = await browser.newContext({
+        ...contextOptions,
+        storageState: existingState || undefined,
+    });
     const page = await context.newPage();
 
     // Script anti-detecção
@@ -41,109 +54,81 @@ async function checkKeywordRanking(domain, keyword, captchaApiKey = null, onEven
     let foundUrl = null;
     let foundPage = null;
 
-    try {
-        // Navega para o Google
-        await page.goto('https://www.google.com', { 
-            waitUntil: 'domcontentloaded', 
-            timeout: 60000 
-        });
-        console.log(`🔍 Buscando ranking para "${keyword}"`);
-        await page.waitForTimeout(randomDelay(1000, 2000));
-
-        // Fecha popup de cookies
+    async function acceptGoogleConsentIfAny() {
         try {
             const cookieSelectors = [
                 'button[id="L2AGLb"]',
                 'button[id="W0wltc"]',
                 '[aria-label="Aceitar tudo"]',
-                '[aria-label="Accept all"]'
+                '[aria-label="Accept all"]',
+                'button:has-text("Aceitar tudo")',
+                'button:has-text("Accept all")',
+                'button:has-text("Concordo")',
+                'button:has-text("I agree")',
+                'div[role="dialog"] button:first-of-type',
             ];
-            
             for (const selector of cookieSelectors) {
-                const cookieButton = page.locator(selector).first();
-                if (await cookieButton.count() > 0) {
-                    await cookieButton.click({ timeout: 3000 }).catch(() => {});
-                    await page.waitForTimeout(1000);
+                const btn = page.locator(selector).first();
+                if (await btn.count()) {
+                    await btn.click({ timeout: 3000 }).catch(() => {});
+                    await page.waitForTimeout(800);
                     break;
                 }
             }
-        } catch (cookieError) {
-            console.log("Popup de cookies não encontrada");
+        } catch (e) {
+            // ignore
+        }
+    }
+
+    async function solveCaptchaIfNeeded() {
+        if (!(await detectCaptcha(page))) return false;
+
+        console.log('⚠️ CAPTCHA detectado');
+        if (!captchaApiKey) {
+            throw new Error('CAPTCHA detectado mas captchaApiKey não fornecido');
         }
 
-        // Preenche o campo de busca
-        const searchSelectors = [
-            'textarea[name="q"]',
-            'input[name="q"]',
-            '[aria-label="Pesquisar"]',
-            '#APjFqb'
-        ];
-        
-        let searchInput;
-        for (const selector of searchSelectors) {
-            searchInput = page.locator(selector).first();
-            if (await searchInput.count() > 0) {
-                try {
-                    await searchInput.waitFor({ state: 'visible', timeout: 5000 });
-                    break;
-                } catch (e) {
-                    continue;
-                }
-            }
+        const siteKey = await extractSiteKey(page);
+        if (!siteKey) {
+            throw new Error('CAPTCHA detectado mas sitekey não encontrado');
         }
 
-        if (!searchInput || await searchInput.count() === 0) {
-            throw new Error('Campo de busca não encontrado');
+        console.log('🔐 Resolvendo CAPTCHA...');
+        const token = await solveRecaptcha(page.url(), siteKey, captchaApiKey);
+        if (!token) {
+            throw new Error('Falha ao resolver CAPTCHA');
         }
 
-        // Usa JavaScript para preencher diretamente
-        await page.evaluate((kw) => {
-            const input = document.querySelector('textarea[name="q"], input[name="q"]');
-            if (input) {
-                input.value = kw;
-                const form = input.closest('form');
-                if (form) form.submit();
-            }
-        }, keyword);
+        await injectRecaptchaToken(page, token);
+        console.log('✅ CAPTCHA resolvido');
+        if (onEvent) onEvent('captcha_solved');
 
-        await page.waitForTimeout(randomDelay(2000, 3000));
+        await page.waitForTimeout(2500);
+        // Após injetar token, um reload costuma estabilizar a SERP
+        await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {});
+        return true;
+    }
 
-        // Detecta e resolve CAPTCHA se necessário
-        if (await detectCaptcha(page)) {
-            console.log('⚠️ CAPTCHA detectado');
-            
-            if (!captchaApiKey) {
-                throw new Error('CAPTCHA detectado mas captchaApiKey não fornecido');
-            }
+    try {
+        console.log(`🔍 Buscando ranking para "${keyword}" [company=${company}]`);
 
-            const siteKey = await extractSiteKey(page);
-            if (!siteKey) {
-                throw new Error('CAPTCHA detectado mas sitekey não encontrado');
-            }
+        // UULE + params para aproximar resultados do Centro de SP
+        const uule = makeUuleFromLatLng(spCenter.latitude, spCenter.longitude);
 
-            console.log('🔐 Resolvendo CAPTCHA...');
-            const token = await solveRecaptcha(page.url(), siteKey, captchaApiKey);
-            
-            if (!token) {
-                throw new Error('Falha ao resolver CAPTCHA');
-            }
-
-            await injectRecaptchaToken(page, token);
-            console.log('✅ CAPTCHA resolvido');
-            
-            if (onEvent) onEvent('captcha_solved');
-            
-            await page.waitForTimeout(3000);
-        }
-
-        // Extrai resultados de cada página (1-10)
+        // Extrai resultados de cada página (1-10) preservando params via start=
         let globalPosition = 0;
         
         for (let pageNum = 1; pageNum <= 10; pageNum++) {
             console.log(`📄 Analisando página ${pageNum}/10`);
+            const start = (pageNum - 1) * 10;
+            const url = `https://www.google.com/search?q=${encodeURIComponent(keyword)}&hl=pt-BR&gl=br&pws=0&uule=${uule}&start=${start}`;
 
-            // Aguarda resultados carregarem
-            await page.waitForTimeout(randomDelay(1500, 2500));
+            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+            await page.waitForTimeout(randomDelay(800, 1400));
+
+            await acceptGoogleConsentIfAny();
+            await solveCaptchaIfNeeded();
+            await page.waitForTimeout(randomDelay(900, 1600));
 
             // Extrai todos os links orgânicos da página
             const resultsOnPage = await page.evaluate(() => {
@@ -210,47 +195,12 @@ async function checkKeywordRanking(domain, keyword, captchaApiKey = null, onEven
                     continue;
                 }
             }
-
-            // Se não é a última página, vai para a próxima
-            if (pageNum < 10) {
-                try {
-                    // Procura botão "Próxima" ou link de paginação
-                    const nextButton = page.locator('a[id="pnnext"]').first();
-                    
-                    if (await nextButton.count() > 0) {
-                        await nextButton.click();
-                        await page.waitForTimeout(randomDelay(2000, 3500));
-                        
-                        // Verifica CAPTCHA novamente após mudar de página
-                        if (await detectCaptcha(page)) {
-                            console.log('⚠️ CAPTCHA na navegação entre páginas');
-                            
-                            if (!captchaApiKey) {
-                                throw new Error('CAPTCHA detectado mas captchaApiKey não fornecido');
-                            }
-
-                            const siteKey = await extractSiteKey(page);
-                            const token = await solveRecaptcha(page.url(), siteKey, captchaApiKey);
-                            await injectRecaptchaToken(page, token);
-                            
-                            if (onEvent) onEvent('captcha_solved');
-                            
-                            await page.waitForTimeout(3000);
-                        }
-                    } else {
-                        console.log(`⚠️ Botão "Próxima" não encontrado na página ${pageNum}`);
-                        break;
-                    }
-                } catch (navError) {
-                    console.log(`Erro ao navegar para página ${pageNum + 1}:`, navError.message);
-                    break;
-                }
-            }
         }
 
         // Se chegou aqui, não encontrou nas 10 páginas
         console.log(`❌ Domínio não encontrado nas primeiras 10 páginas (${globalPosition} resultados analisados)`);
         
+        await saveStorageStateAtomic(context, statePath).catch(() => {});
         await browser.close();
         
         return {
@@ -261,6 +211,8 @@ async function checkKeywordRanking(domain, keyword, captchaApiKey = null, onEven
 
     } catch (error) {
         console.error('Erro ao verificar ranking:', error.message);
+        // tenta salvar state mesmo em erro (pode ajudar a manter cookies de consent)
+        await saveStorageStateAtomic(context, statePath).catch(() => {});
         if (browser) await browser.close();
         throw error;
     }

@@ -105,7 +105,8 @@ async function processJob(job, captchaApiKey) {
                         captchaSolvedInThisRequest = true;
                         captchasSolved++;
                     }
-                }
+                },
+                job.company
             );
 
             results.push({

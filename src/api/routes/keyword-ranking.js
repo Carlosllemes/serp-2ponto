@@ -71,7 +71,7 @@ router.post('/check-ranking', authMiddleware, async (req, res) => {
     try {
         const result = await checkKeywordRanking(domain, keyword, captchaApiKey, (event) => {
             if (event === 'captcha_solved') captchaSolved = true;
-        });
+        }, req.company);
 
         metrics.logRequest(req.company, {
             success: true,
@@ -135,7 +135,7 @@ router.get('/check-ranking', authMiddleware, async (req, res) => {
     try {
         const result = await checkKeywordRanking(domain, keyword, captchaApiKey, (event) => {
             if (event === 'captcha_solved') captchaSolved = true;
-        });
+        }, req.company);
 
         metrics.logRequest(req.company, {
             success: true,

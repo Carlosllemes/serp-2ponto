@@ -26,3 +26,6 @@ debug_screenshot.png
 # OS
 .DS_Store
 Thumbs.db
+
+# Persistência de sessão/cookies (Playwright storageState)
+state/
